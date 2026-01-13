@@ -1,0 +1,26 @@
+4）QLoRA（4bit）训练配置（低显存）
+
+关键点：基座以 4bit 加载（bitsandbytes 等），仍训练 LoRA adapter。LlamaFactory 支持 quantization_bit/quantization_method 这类字段
+
+model_name_or_path: Qwen/Qwen2.5-3B-Instruct
+
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_target: all
+
+# QLoRA / 低比特加载（字段来自 LlamaFactory quantization 文档范式）:contentReference[oaicite:11]{index=11}
+quantization_bit: 4
+quantization_method: bitsandbytes
+
+dataset: finance_sft_demo
+template: qwen
+cutoff_len: 1024
+
+output_dir: saves/qwen2.5-3b/qlora/sft_finance
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 8.0e-5
+num_train_epochs: 3.0
+warmup_ratio: 0.1
+bf16: true
