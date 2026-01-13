@@ -1,301 +1,123 @@
-Week 1：Python 与深度学习底层（让你能“写得出、看得懂、调得动”）
-1. 张量思维与形状推理（Tensor/Shape Calculus）
-你必须掌握
+Week 1：Python 与深度学习底层（训练能跑 + 能定位 bug + 能解释稳定性）
+章节重点 1：张量/Shape 推理
 
-张量的维度语义：(B, T, D) 分别是什么？（batch、序列长度、特征维）
+面试考点 1：Transformer 常见张量形状（B,T,D）是什么？
+满分答案：B 是 batch size，T 是序列长度（token 数），D 是隐藏维度（embedding/hidden size）。Transformer 的绝大多数 bug 来自维度对不上或广播错误，所以必须能对每层输入输出形状做推导。
 
-矩阵乘法规则：(…, m, k) @ (…, k, n) -> (…, m, n)
+面试考点 2：矩阵乘法/广播规则为什么重要？
+满分答案：Attention 的核心计算是 Q @ K^T，形状从 (B,H,T,Dh) @ (B,H,Dh,T) 变成 (B,H,T,T)。mask 往往要广播到 (B,H,T,T)，广播错了会出现“看未来/看 padding”的隐性错误。
 
-Broadcasting：为什么能自动扩展？什么时候会 silently 出 bug？
+面试考点 3：reshape/view/transpose/permute 区别是什么？为什么 contiguous 重要？
+满分答案：transpose/permute 只是改变 stride，可能导致张量非连续；view 需要连续内存，否则会报错或产生错误视图；contiguous 会拷贝生成连续内存，保证后续 view/线性层安全。多头注意力经常在 split/merge heads 时踩这个坑。
 
-view/reshape/transpose/permute：为什么“只是换视图”会影响后续 contiguous？
+章节重点 2：数值稳定性（NaN 排查必备）
 
-einsum 思维：用指标法理解 attention 的实现和优化
+面试考点 4：softmax 为什么会数值不稳定？如何解决？
+满分答案：softmax 有 exp(x)，x 大时 exp 溢出变 inf，导致 NaN。标准解法是减去最大值：softmax(x)=exp(x-max)/sum(exp(x-max))，数值等价但稳定。
 
-Why（面试常问）
+面试考点 5：为什么 attention mask 用 -inf（或很小负数）？
+满分答案：把禁止位置的 logits 设为 -inf，softmax 后概率严格为 0，且不会影响其它位置归一化；这是实现 causal mask / padding mask 的标准方式。
 
-Transformer 的 bug 80% 来自 shape、mask 广播、transpose 错维。
+面试考点 6：logsumexp trick 是什么？为什么等价？
+满分答案：log(sum(exp(x))) 不稳定，写成 m + log(sum(exp(x-m)))，其中 m=max(x)，利用指数平移不改变归一化比例，避免 overflow。
 
-你能稳定推 shape，说明你能写大模型底层模块，不止会调库。
+章节重点 3：反向传播直觉与训练稳定性
 
-2. 数值稳定性（训练能不能跑起来的生死线）
-你必须掌握
+面试考点 7：为什么深网络会梯度消失/爆炸？残差如何解决？
+满分答案：多层复合导致梯度是多项导数连乘，容易趋近 0 或爆炸。残差连接提供“恒等捷径”，让梯度可以绕开复杂变换直接传播，显著提升深层可训练性。
 
-Softmax 为什么会溢出？（exp 爆炸）
+面试考点 8：dropout 的作用是什么？train/eval 为什么要切换？
+满分答案：dropout 随机置零部分激活，减少共适应、防过拟合。训练时启用，推理时要关闭保证确定性与性能，所以需要 model.train() / model.eval()。
 
-LogSumExp trick 是什么？为什么等价？
+章节重点 4：优化器与学习率策略（工程高频）
 
-为什么 cross-entropy 通常从 logits 直接算，而不是先 softmax？
+面试考点 9：Adam vs SGD，为什么大模型常用 AdamW？
+满分答案：Adam 用一阶/二阶动量自适应学习率，收敛更快更稳；AdamW 把 weight decay 从梯度更新里解耦，避免 Adam 下 L2 正则效果偏差，是 Transformer/LLM 的标准优化器。
 
-必备代码：稳定 softmax / logsumexp
-import numpy as np
+面试考点 10：为什么 Transformer 训练需要 warmup？
+满分答案：早期参数随机、梯度噪声大，直接用高学习率易发散。warmup 让学习率从小到大逐步升高，提高训练稳定性。
 
-def logsumexp(x, axis=-1, keepdims=True):
-    # WHY：避免 exp(x) 溢出。先减去最大值，指数不会爆
-    m = np.max(x, axis=axis, keepdims=True)
-    return m + np.log(np.sum(np.exp(x - m), axis=axis, keepdims=True))
+面试考点 11：什么是 gradient clipping？为什么有用？
+满分答案：对梯度范数设上限（如 1.0），防止偶发的大梯度导致参数爆炸与 loss NaN，常用于 RNN/Transformer 的稳定训练。
 
-def softmax(x, axis=-1):
-    # WHY：稳定 softmax = exp(x - max) / sum(exp(x - max))
-    x = x - np.max(x, axis=axis, keepdims=True)
-    ex = np.exp(x)
-    return ex / np.sum(ex, axis=axis, keepdims=True)
+章节重点 5：PyTorch 基础（面试+工作底线）
 
-Why（重要）
+面试考点 12：Parameter vs buffer 区别？
+满分答案：Parameter 会被优化器更新（可训练参数）；buffer 不参与训练但会随模型保存/加载与搬迁 device（如位置编码表、running stats）。
 
-attention 里 softmax 每一步都在用，不稳定就会 NaN；
+面试考点 13：no_grad 的作用是什么？
+满分答案：推理时关闭 autograd，不保存中间激活，显著节省显存并加速，适用于评估与生成。
 
-做研究/工程，NaN 排查能力是“入门线”。
+Week 2：Transformer 核心（你要能解释并手写关键模块）
+章节重点 1：为什么需要 Attention（结构动机）
 
-3. 深度学习的“梯度与反向传播”直觉（不用你手推全网，但要懂机制）
-你必须掌握
+面试考点 14：为什么 Transformer 取代 RNN/CNN？
+满分答案：RNN 串行计算难并行、长依赖差；CNN 需要很多层才能覆盖长距离。Attention 能并行计算任意位置交互，且更适配 GPU，长程依赖建模更直接。
 
-链式法则在计算图里怎么走
+章节重点 2：Scaled Dot-Product Attention（核心公式）
 
-为什么会出现梯度消失/爆炸（深层复合 + 激活饱和）
+面试考点 15：Attention 的公式与每项含义？
+满分答案：Attn(Q,K,V)=softmax(QK^T/√d + mask) V。Q 表示当前查询，K 表示可匹配的“索引”，V 是要汇聚的信息内容；softmax 得到权重后对 V 加权求和。
 
-为什么 residual 能救深网络（给梯度开高速路）
+面试考点 16：为什么要除以 √d？
+满分答案：维度增大时 dot product 方差增大，softmax 输出变得极尖，梯度不稳定；除以 √d 进行尺度归一化，稳定训练。
 
-autograd 在做什么（保存中间变量/构图/反传）
+面试考点 17：causal mask 与 padding mask 有何区别？
+满分答案：causal mask 禁止看未来 token（自回归生成必须）；padding mask 禁止关注 padding 位置（变长序列的空位）。二者可叠加使用。
 
-Why（面试常问）
+章节重点 3：Q/K/V 为什么要分开学（高频灵魂题）
 
-“你为什么选择 Pre-LN？”、“为什么 residual 有效？”都来自这里。
+面试考点 18：为什么不直接用 embedding 做相似度，而要投影成 Q/K/V？
+满分答案：投影让模型在不同子空间学习不同关系：Q 决定“我想要什么信息”，K 决定“我能提供什么线索”，V 决定“我提供的信息内容”。分离后表达能力更强，也使多头注意力可在不同投影空间并行建模多种关系。
 
-4. 优化器与训练稳定性（Adam/weight decay/学习率）
-你必须掌握
+章节重点 4：Multi-Head Attention（为什么多头有效）
 
-SGD vs Adam：为什么 Adam 更“快启动”
+面试考点 19：多头注意力的动机是什么？
+满分答案：单头相当于在一个表示空间里做匹配，容易受限；多头是多个低维子空间并行关注不同模式（局部/全局、语法/语义、指代等），提升表达能力与泛化。
 
-Momentum 的物理直觉：低通滤波减少震荡
+面试考点 20：多头计算流程？
+满分答案：先用线性层得到 Q/K/V（维度 D），再 reshape 为 H 个 head（Dh=D/H），每个 head 独立 attention，最后 concat 并线性投影回 D。
 
-Weight decay vs L2 正则：在 Adam 下为什么要 decouple（AdamW）
+章节重点 5：位置编码（为什么必须要）
 
-学习率：为什么 warmup 对 Transformer 特别重要（早期梯度噪声大）
+面试考点 21：为什么 Transformer 需要位置编码？
+满分答案：注意力对输入 token 的排列天然不敏感（置换不变），不加位置信息模型无法区分顺序。位置编码把“顺序”注入 token 表示，才能建模语序与依赖。
 
-Why（工作必用）
+面试考点 22：sinusoidal vs learned 位置编码区别？
+满分答案：sinusoidal 是固定函数编码，具备一定外推能力；learned 是可训练参数，更贴合数据分布但外推不一定好。现代 LLM 多用 RoPE/ALiBi 等更适合长上下文的方法（Week3 深入）。
 
-你训练模型最常调的不是网络结构，而是 LR / WD / warmup / batch。
+章节重点 6：FFN（非线性变换的必要性）
 
-5. PyTorch 必备工程点（面试+工作）
-你必须掌握
+面试考点 23：FFN 在 Transformer 里干什么？
+满分答案：Attention 更像“信息路由/加权汇聚”，FFN 对每个 token 独立做非线性特征变换，提升模型表示能力。没有 FFN，模型表达会明显受限。
 
-nn.Module / Parameter / buffer 的区别
+章节重点 7：LayerNorm + Residual（训练可行性的关键）
 
-model.train() vs model.eval()（dropout/layernorm 行为差异）
+面试考点 24：为什么用 LayerNorm 而不是 BatchNorm？
+满分答案：序列任务 batch size 可能很小、长度变化大，BatchNorm 依赖 batch 统计量易不稳定；LayerNorm 对单样本特征维归一，适配 NLP/Transformer。
 
-torch.no_grad() 为什么能省显存
+面试考点 25：残差连接为什么关键？
+满分答案：让梯度和信息通过恒等路径传播，减轻深层训练困难；同时让每层学习“增量修正”而非从零重构。
 
-dtype / mixed precision（fp16/bf16）基本概念：为什么能更快
+章节重点 8：Pre-LN vs Post-LN（深层训练高频）
 
-seed 与可复现：为什么“完全可复现”在 GPU 上很难
+面试考点 26：Pre-LN 和 Post-LN 区别？为什么现代 LLM 多用 Pre-LN？
+满分答案：Post-LN 是原始 Transformer（LN 在残差之后），深层训练更不稳定；Pre-LN（LN 在子层之前）梯度更稳定，更易训练深网络，因此现代大模型普遍采用 Pre-LN。
 
-6. 表示学习基础：Embedding 与相似度（为 attention 做铺垫）
-你必须掌握
+章节重点 9：Decoder-only GPT（为什么主流 LLM 是这样）
 
-embedding 是什么：离散 token -> 连续向量
+面试考点 27：为什么 GPT/LLaMA/Qwen 多采用 decoder-only？
+满分答案：decoder-only 用 causal mask 做自回归 next-token 预测，目标统一、数据规模易扩展、适配生成任务。相比 encoder-decoder，它更适合“通用生成式建模”。
 
-dot product 相似度：为什么能表示匹配/相关
+章节重点 10：训练目标与评估指标
 
-cosine vs dot：scale 的影响是什么
+面试考点 28：next-token prediction 如何构造 label？
+满分答案：输入序列 x 的第 0..T-1 个 token，预测第 1..T 个 token（label 右移一位）。loss 通常用 cross-entropy 直接从 logits 计算。
 
-Week 2：Transformer 手撕核心（让你“能从零写一个 mini-Transformer”）
-1. NLP 到 Transformer：为什么需要 Attention
-你必须掌握
+面试考点 29：perplexity 是什么？
+满分答案：ppl = exp(cross_entropy_loss)，衡量模型对序列的不确定性；越低说明模型越能预测下一 token。
 
-RNN 的瓶颈：长依赖 + 串行计算
+章节重点 11：推理与加速入门（KV Cache）
 
-CNN 的局限：局部感受野堆叠成本高
-
-Attention 的核心：并行 + 任意位置交互
-
-Why（关键）
-
-Transformer 的胜利不是“更聪明”，而是更适合 GPU 并行 + 长程依赖。
-
-2. Scaled Dot-Product Attention（核心中的核心）
-你必须掌握（公式+直觉）
-
-输入：Q, K, V
-
-权重：A = softmax(QK^T / sqrt(dk) + mask)
-
-输出：O = A V
-
-Why：为什么要除以 sqrt(dk)
-
-QK^T 的方差随维度增长变大 → softmax 更尖锐 → 梯度更不稳定
-
-除 sqrt(dk) 相当于做了一个 方差归一化
-
-必备代码：Scaled Dot-Product Attention（含 mask）
-import numpy as np
-
-def make_causal_mask(T):
-    # WHY：decoder-only LLM 不能看未来 token
-    # mask=True 表示“禁止关注”
-    return np.triu(np.ones((T, T), dtype=bool), k=1)
-
-def scaled_dot_product_attention(Q, K, V, mask=None):
-    """
-    Q: (B, H, T, Dh)
-    K: (B, H, T, Dh)
-    V: (B, H, T, Dh)
-    mask: (T, T) 或可广播到 (B, H, T, T) 的布尔mask（True=禁用）
-    """
-    Dh = Q.shape[-1]
-    scores = np.matmul(Q, np.swapaxes(K, -2, -1)) / np.sqrt(Dh)  # (B,H,T,T)
-
-    if mask is not None:
-        # WHY：被mask的位置设为 -inf，softmax 后权重为0
-        scores = np.where(mask, -1e9, scores)
-
-    attn = softmax(scores, axis=-1)         # (B,H,T,T)
-    out = np.matmul(attn, V)                # (B,H,T,Dh)
-    return out, attn
-
-面试必问点（你要能一句话答）
-
-mask 为什么用 -inf：为了 softmax 后变成 0 且不影响未 mask 项归一化
-
-padding mask 和 causal mask 区别：
-
-padding mask：不看“空位置”
-
-causal mask：不看“未来位置”
-
-3. Multi-Head Attention（多头注意力）
-你必须掌握
-
-为什么要多头：
-
-单头只能在一个子空间里做匹配
-
-多头相当于多个“不同投影空间”的并行匹配（不同关系：语法、指代、位置等）
-
-具体做法：
-
-线性层把 D 拆成 H 个 Dh
-
-每个 head 独立 attention
-
-concat 后再投影回 D
-
-必备代码：split/combine heads
-def split_heads(x, H):
-    # x: (B, T, D) -> (B, H, T, Dh)
-    B, T, D = x.shape
-    assert D % H == 0
-    Dh = D // H
-    x = x.reshape(B, T, H, Dh)
-    return np.transpose(x, (0, 2, 1, 3))
-
-def combine_heads(x):
-    # x: (B, H, T, Dh) -> (B, T, D)
-    B, H, T, Dh = x.shape
-    x = np.transpose(x, (0, 2, 1, 3))
-    return x.reshape(B, T, H * Dh)
-
-4. Position：为什么必须有位置编码
-你必须掌握
-
-Attention 本身对 token 顺序不敏感（Permutation-invariant）
-
-所以必须注入位置信息：
-
-sinusoidal（经典）
-
-learned（可学习）
-
-旋转位置编码 RoPE（LLaMA/Qwen 常用，Week3 深挖）
-
-Why（面试常问）
-
-“没有位置编码会怎样？”→ 模型只会学“词袋式”的集合关系，顺序丢失。
-
-5. FFN（前馈网络）与非线性：为什么不是只堆 Attention
-你必须掌握
-
-FFN 在每个 token 上做非线性变换：提升表达能力
-
-经典 Transformer FFN：Linear -> GELU/ReLU -> Linear
-
-现代 LLM 常见：SwiGLU（Week3 讲变体）
-
-Why
-
-Attention 更像“信息路由/加权汇聚”，FFN 更像“局部特征变换/提取”。
-
-6. Residual + LayerNorm：Transformer 能训起来的关键
-你必须掌握
-
-residual：让信息与梯度有捷径
-
-layernorm：对每个 token 的特征维做归一，稳定训练
-
-Why：为什么是 LayerNorm 不是 BatchNorm
-
-NLP 的序列长度变化大、batch size 也可能很小
-
-BatchNorm 依赖 batch 统计量，容易不稳定
-
-LayerNorm 对每个样本自身归一，更适合序列模型
-
-必备代码：LayerNorm（numpy版）
-def layer_norm(x, eps=1e-5):
-    """
-    x: (B, T, D)
-    """
-    mean = x.mean(axis=-1, keepdims=True)
-    var  = ((x - mean)**2).mean(axis=-1, keepdims=True)
-    xhat = (x - mean) / np.sqrt(var + eps)
-    return xhat
-
-
-真正可训练版本还需要 learnable 的 gamma/beta（PyTorch 里 nn.LayerNorm 帮你做了）。
-
-7. Transformer Block（你必须能写出来并解释每一行）
-你必须掌握
-
-结构：x -> (LN) -> MHA -> +res -> (LN) -> FFN -> +res
-
-Pre-LN vs Post-LN：
-
-Pre-LN：更稳定（现代 LLM 常用）
-
-Post-LN：原始 Transformer，用深了更难训
-
-Why（面试）
-
-为什么 Pre-LN 更稳定：梯度更容易通过归一化后的路径传播，深层不容易崩。
-
-8. Decoder-only LLM：为什么 GPT/LLaMA 都是 decoder-only
-你必须掌握
-
-decoder-only + causal mask → 做 next token prediction
-
-为什么适合大规模生成任务：统一成一个自回归目标
-
-9. 训练目标：next-token prediction + Cross-Entropy
-你必须掌握
-
-teacher forcing：输入是 x_0..x_{t-1}，预测 x_t
-
-label 右移（shift）
-
-perplexity 是什么：exp(loss)
-
-Why
-
-这是大语言模型的“最统一、最可规模化”的训练范式。
-
-10. 推理基础：KV Cache（Week13会深讲，这里要先懂概念）
-你必须掌握
-
-为什么生成时每步重算 attention 代价高
-
-KV cache：缓存历史 token 的 K/V，避免重复计算
-
-Why（工程落地）
-
-你做部署/加速时必须懂它，否则无法解释吞吐量瓶颈。
+面试考点 30：KV Cache 是什么？为什么能加速生成？
+满分答案：生成时每步只新增一个 token，如果每次都对全部历史重算 K/V，代价高。KV cache 把历史 K/V 缓存起来，新步只计算新 token 的 K/V，与历史拼接即可，避免重复计算，显著提升吞吐。
