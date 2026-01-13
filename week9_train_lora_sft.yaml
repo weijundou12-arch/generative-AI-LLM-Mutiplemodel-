@@ -39,3 +39,7 @@ val_size: 0.1
 per_device_eval_batch_size: 1
 eval_strategy: steps
 eval_steps: 200
+
+llamafactory-cli train train_lora_sft.yaml
+# 也可以在命令行覆盖 yaml 参数（官方支持这种写法）:contentReference[oaicite:9]{index=9}
+# llamafactory-cli train train_lora_sft.yaml learning_rate=5e-5 logging_steps=5
