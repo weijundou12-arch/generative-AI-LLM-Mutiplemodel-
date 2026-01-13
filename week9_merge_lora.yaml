@@ -1,0 +1,35 @@
+5）LoRA 合并导出（merge）
+
+训练完你通常要 merge，LlamaFactory 给了标准命令与 merge 配置结构：llamafactory-cli export ...
+
+model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+adapter_name_or_path: saves/qwen2.5-1.5b/lora/sft_finance
+template: qwen
+finetuning_type: lora
+
+export_dir: models/qwen2.5-1.5b-finance-merged
+export_size: 2
+export_device: cpu
+export_legacy_format: false
+
+llamafactory-cli export merge_lora.yaml
+
+
+6）推理（chat / api）
+
+推理配置需要 model + template；如果是 LoRA 适配器推理，还要 adapter_name_or_path + finetuning_type。
+
+保存为：infer_lora.yaml
+
+model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+adapter_name_or_path: saves/qwen2.5-1.5b/lora/sft_finance
+template: qwen
+finetuning_type: lora
+infer_backend: huggingface  # 或 vllm:contentReference[oaicite:14]{index=14}
+
+
+推理命令：
+
+llamafactory-cli chat infer_lora.yaml
+# 或开启 OpenAI 风格 API（LlamaFactory 支持 api 模式）:contentReference[oaicite:15]{index=15}
+# API_PORT=8000 CUDA_VISIBLE_DEVICES=0 llamafactory-cli api infer_lora.yaml
