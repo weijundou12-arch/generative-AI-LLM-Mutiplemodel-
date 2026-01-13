@@ -1,0 +1,41 @@
+3）LoRA SFT 训练配置（YAML）
+
+你只要把 model_name_or_path 换成你本地能跑的小模型即可（比如 Qwen2.5-1.5B-Instruct）。
+LlamaFactory 的 SFT 示例字段与训练命令范式如下（llamafactory-cli train ...，以及可在命令行追加覆盖参数）。
+
+# train_lora_sft.yaml
+# LoRA + SFT 最小可跑配置（按 LlamaFactory SFT 范式）:contentReference[oaicite:7]{index=7}
+
+model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_target: all
+
+# 数据集：这里用你注册名 finance_sft_demo
+dataset: finance_sft_demo
+template: qwen  # 关键：template 必须与模型匹配，训练/推理一致:contentReference[oaicite:8]{index=8}
+cutoff_len: 1024
+max_samples: 2000
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+output_dir: saves/qwen2.5-1.5b/lora/sft_finance
+logging_steps: 10
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+
+val_size: 0.1
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 200
