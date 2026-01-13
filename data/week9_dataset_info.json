@@ -1,0 +1,14 @@
+2）LlamaFactory 数据注册（dataset_info.json）
+
+LlamaFactory 常用做法是把数据集登记到 dataset_info.json（不同安装方式路径略有差异；你可以在项目内维护一个）。
+保存为：data/dataset_info.json
+
+{
+  "finance_sft_demo": {
+    "file_name": "finance_sft_sharegpt.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations"
+    }
+  }
+}
