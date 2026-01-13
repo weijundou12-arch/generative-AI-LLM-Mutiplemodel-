@@ -1,3 +1,25 @@
+ Week 3「LLaMA & 现代 Transformer 变体」全覆盖的可运行单文件代码（PyTorch），带具体场景（生成“临床/口腔病历风格”文本），并且把 Week3 的核心考点都落在代码里：
+
+覆盖点（都在代码/注释里）
+
+LLaMA-style Block：Pre-Norm、无 bias
+
+RMSNorm（替代 LayerNorm）
+
+RoPE（旋转位置编码，作用于 Q/K）
+
+SwiGLU FFN（门控前馈）
+
+GQA / MQA / MHA（通过 n_kv_heads 控制）
+
+KV Cache（增量生成 decode）
+
+prefill vs decode（计时演示）
+
+FlashAttention/SDPA（概念在注释里解释；本例为了讲清 cache + GQA，采用手写 attention）
+
+Tokenizer（教学用 char-level；注释解释为何生产常用 SentencePiece）
+
 """
 week3_llama_variants_demo.py
 
