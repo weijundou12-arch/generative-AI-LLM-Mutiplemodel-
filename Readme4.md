@@ -80,3 +80,6 @@ Week 4 知识点（面试满分答案版）
 
 面试考点 22：为什么要反向代理（Nginx/Caddy）？
 满分简答：负责 TLS、压缩、连接管理、超时、限流、静态资源与路由；后端 FastAPI 专注业务与推理。
+
+“院内辅助生成病历/随访记录”：
+前端把 system + user 消息发到 /v1/chat/completions，后端加载本地模型（或没有模型时用 Dummy 回退），支持流式输出 SSE、鉴权、限流、健康检查、基础 metrics、日志 request_id。
